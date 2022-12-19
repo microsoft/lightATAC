@@ -9,7 +9,7 @@ from lightATAC.value_functions import TwinQ, ValueFunction
 from lightATAC.util import Log, set_seed
 from lightATAC.bc import BehaviorPretraining
 from lightATAC.atac import ATAC
-from lightATAC.util import (evaluate_policy, sample_batch, traj_data_to_qlearning_data, tuple_to_traj_data, DEFAULT_DEVICE)
+from lightATAC.util import evaluate_policy, sample_batch, traj_data_to_qlearning_data, tuple_to_traj_data, DEFAULT_DEVICE
 
 EPS=1e-6
 
@@ -33,12 +33,18 @@ def eval_agent(*, env, agent, discount, n_eval_episodes, max_episode_steps=1000,
         info_dict["normalized return std"] =  normalized_returns.std()
     return info_dict
 
+def get_dataset(env):
+    while True:
+        try:
+            return env.get_dataset()
+        except (HTTPError, OSError):
+            print('Unable to download dataset. Retry.')
 
 def main(args):
     # ------------------ Initialization ------------------ #
     torch.set_num_threads(1)
     env = gym.make(args.env_name)  # d4rl ENV
-    dataset = env.get_dataset()
+    dataset = get_dataset(env)
     set_seed(args.seed, env=env)
 
     # Setup logger
@@ -73,7 +79,7 @@ def main(args):
 
     # Train policy and value to fit the behavior data
     bp = BehaviorPretraining(networks, optimizers, lambd=0.99, discount=args.discount)
-    traj_data = bp.train(tuple_to_traj_data(dataset), args.n_warmstart_steps, log_fun= lambda x: print(x))
+    dataset = bp.train(dataset, args.n_warmstart_steps, log_fun= lambda x: print(x))  # This ensures "next_observations" is in `dataset`.
 
     # Main Training
     for step in trange(args.n_steps):
@@ -107,7 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--discount', type=float, default=0.99)
     parser.add_argument('--hidden_dim', type=int, default=256)
-    parser.add_argument('--n_hidden', type=int, default=2)
+    parser.add_argument('--n_hidden', type=int, default=3)
     parser.add_argument('--n_steps', type=int, default=10**6)
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--fast_lr', type=float, default=5e-4)

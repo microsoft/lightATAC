@@ -4,48 +4,56 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torchaudio
 from scipy import signal
 
 DEFAULT_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 # Methods for processing trajectories
 
 def traj_to_tuple_data(traj_data, ignores=("metadata",)):
-    """Concatenate a list of trajectory dicts to a dict of np.arrays of the same length."""
+    """Concatenate a list of trajectory dicts to a dict of np.arrays or torch.tensors."""
     tuple_data = dict()
     for k in traj_data[0].keys():
         if not any([ig in k for ig in ignores]):
-            tuple_data[k] = np.concatenate([traj[k] for traj in traj_data])
+            if torch.is_tensor(traj_data[0][k]):
+                tuple_data[k] = torch.cat([traj[k] for traj in traj_data])
+            else:
+                tuple_data[k] = np.concatenate([traj[k] for traj in traj_data])
     return tuple_data
 
 
 def tuple_to_traj_data(tuple_data, ignores=("metadata",)):
-    """Split a tuple_data dict in d4rl format to list of trajectory dicts."""
+    """Split a tuple_data dict of np.arrays or torch.tensors in d4rl format to list of trajectory dicts."""
+    assert 'timeouts' in tuple_data and 'terminals' in tuple_data
+
     tuple_data["timeouts"][-1] = not tuple_data["terminals"][-1]
     ends = (tuple_data["terminals"] + tuple_data["timeouts"]) > 0
     ends[-1] = False  # don't need to split at the end
 
-    inds = np.arange(len(ends))[ends] + 1
+    inds = torch.arange(len(ends))[ends] + 1
     tmp_data = dict()
     for k, v in tuple_data.items():
         if not any([ig in k for ig in ignores]):
-            tmp_data[k] = np.split(v, inds)
+            if torch.is_tensor(v):
+                secs = np.diff(np.insert(inds, (0,len(inds)),  (0,len(v)))).tolist()
+                tmp_data[k] = v.split(secs)
+            else:
+                tmp_data[k] = np.split(v, inds)
     traj_data = [
         dict(zip(tmp_data, t)) for t in zip(*tmp_data.values())
     ]  # convert to list of dict
     return traj_data
 
 
-def traj_data_to_qlearning_data(traj_data, ignores=("metadata",)):
-    """Convert a list of trajectory dicts into d4rl qlearning data format."""
-    traj_data = copy.deepcopy(traj_data)
-    for traj in traj_data:
+def add_next_observations(traj):
+    if "next_observations" not in traj:
         # process 'observations'
-        if traj["terminals"][-1] > 0:
-            traj["observations"] = np.append(
-                traj["observations"], traj["observations"][-1:], axis=0
-            )  # duplicate
+        if traj["terminals"][-1] > 0:  # duplicate the last element
+            if torch.is_tensor(traj["observations"]):
+                traj["observations"] = torch.cat((traj["observations"], traj["observations"][-1:]), dim=0)
+            else:
+                traj["observations"] = np.append(traj["observations"], traj["observations"][-1:], axis=0)
         else:  # ends because of timeout
             for k, v in traj.items():
                 if k != "observations":
@@ -53,10 +61,27 @@ def traj_data_to_qlearning_data(traj_data, ignores=("metadata",)):
         # At this point, traj['observations'] should have one more element than the others.
         traj["next_observations"] = traj["observations"][1:]
         traj["observations"] = traj["observations"][:-1]
-        lens = [len(v) for k, v in traj.items()]
-        assert all([lens[0] == l for l in lens[1:]])
+    lens = [len(v) for k, v in traj.items()]
+    assert all([lens[0] == l for l in lens[1:]])
 
+
+def traj_data_to_qlearning_data(traj_data, ignores=("metadata",)):
+    """Convert a list of trajectory dicts of np.arrays or torch.tensors into d4rl qlearning data format.
+       This would add a new field "next_observations".
+    """
+    traj_data = copy.deepcopy(traj_data)
+    for traj in traj_data:
+        add_next_observations(traj)
     return traj_to_tuple_data(traj_data, ignores=ignores)
+
+def cat_data_dicts(*data_dicts):
+    new_data = dict()
+    for k in data_dicts[0]:
+        if torch.is_tensor(data_dicts[0][k]):
+            new_data[k] = torch.cat([d[k] for d in data_dicts])
+        else:
+            new_data[k] = np.concatenate([d[k] for d in data_dicts])
+    return new_data
 
 
 def discount_cumsum(x, discount):
@@ -70,8 +95,13 @@ def discount_cumsum(x, discount):
     Returns:
         np.ndarrary: Discounted cumulative sum.
     """
-    return signal.lfilter([1], [1, float(-discount)], x[::-1],
-                                axis=-1)[::-1]
+    if torch.is_tensor(x):
+        return torchaudio.functional.lfilter(
+                x.flip(dims=(0,)),
+                a_coeffs=torch.tensor([1, -discount], device=x.device),
+                b_coeffs=torch.tensor([1, 0], device=x.device), clamp=False).flip(dims=(0,))
+    else:
+        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=-1)[::-1]
 
 
 
@@ -138,6 +168,8 @@ def update_exponential_moving_average(target, source, alpha):
 
 
 def torchify(x):
+    if torch.is_tensor(x):
+        return x
     x = torch.from_numpy(x)
     if x.dtype is torch.float64:
         x = x.float()
