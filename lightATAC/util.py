@@ -83,6 +83,11 @@ def cat_data_dicts(*data_dicts):
             new_data[k] = np.concatenate([d[k] for d in data_dicts])
     return new_data
 
+def normalized_sum(loss, reg, w):
+    return loss/w + reg if w>1 else loss + w*reg
+
+def asymmetric_l2_loss(u, tau):
+    return torch.mean(torch.abs(tau - (u < 0).float()) * u**2)
 
 def discount_cumsum(x, discount):
     """Discounted cumulative sum.
@@ -155,11 +160,65 @@ def compute_batched(f, *inputs):
         assert all(x == lens[0] for x in lens)
 
     outputs = f(*[torch.cat(xs, dim=0) for xs in inputs])
-    if torch.is_tensor(outputs):
-        return outputs.split([len(x) for x in inputs[0]])
+    if torch.is_tensor(outputs) or isinstance(outputs, torch.distributions.Distribution):
+        return split(outputs, [len(x) for x in inputs[0]])
     else:  # suppose that's iterable.
-        outputs = (o.split([len(x) for x in inputs[0]]) for o in outputs)
+        outputs = (split(o, [len(x) for x in inputs[0]]) for o in outputs)
         return tuple(zip(*outputs))
+
+
+def split(tensor_or_distribution, split_size_or_sections):
+    if torch.is_tensor(tensor_or_distribution):
+        return torch.split(tensor_or_distribution, split_size_or_sections)
+    else:
+        return split_dist(tensor_or_distribution, split_size_or_sections)
+
+
+def split_dist(dist, split_size_or_sections):
+    """ Split a Distribution object. """
+    batch_shape = dist.batch_shape
+
+    if isinstance(split_size_or_sections, int):
+        size = split_size_or_sections
+        batch_size = batch_shape[0]
+        max_section = batch_size // size
+        st = 0
+        slices = []
+        for _ in range(size):
+            ed = min(st + max_section, batch_size)
+            if _ == size-1:
+                assert ed==batch_size
+            slices.append(slice(st, ed))
+            st = ed
+    elif isinstance(split_size_or_sections, (list, tuple)):
+        sections = split_size_or_sections
+        assert sum(sections)==batch_shape[0]
+        st = 0
+        slices = []
+        for section in sections:
+            ed = st + section
+            slices.append(slice(st, ed))
+            st = ed
+    else:
+        raise ValueError("split_size_or_sections should be int, or list/tuple of int")
+    return ( slice_dist(dist, s) for s in slices)
+
+
+def slice_dist(dist, slice):
+    """ Recursively slicing a Distribution object. """
+    batch_shape = dist.batch_shape
+    new = type(dist).__new__(type(dist))
+    for k, v in dist.__dict__.items():
+        if isinstance(v, torch.distributions.Distribution):
+            sliced_v = slice_dist(v, slice)
+        elif isinstance(v, torch.Tensor) and batch_shape == v.shape[:len(batch_shape)]:
+            sliced_v = v[slice]
+        elif 'batch_shape' in k:
+            sliced_v = torch.zeros(v)[slice].shape
+        else:
+            sliced_v = v
+        setattr(new, k, sliced_v)
+    return new
 
 
 def update_exponential_moving_average(target, source, alpha):

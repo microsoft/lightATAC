@@ -4,11 +4,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from lightATAC.util import compute_batched, DEFAULT_DEVICE, update_exponential_moving_average
+from lightATAC.util import compute_batched, DEFAULT_DEVICE, update_exponential_moving_average, normalized_sum
 
-
-def normalized_sum(loss, reg, w):
-    return loss/w + reg if w>1 else loss + w*reg
 
 def l2_projection(constraint):
     @torch.no_grad()
@@ -28,14 +25,15 @@ class ATAC(nn.Module):
                  discount=0.99,
                  Vmin=-float('inf'), # min value of Q (used in target backup)
                  Vmax=float('inf'), # max value of Q (used in target backup)
-                 action_shape,  # shape of the action space
                  # Optimization parameters
                  policy_lr=5e-7,
                  qf_lr=5e-4,
                  target_update_tau=5e-3,
+                 # Entropy control
+                 action_shape=None,  # shape of the action space
                  fixed_alpha=None,
                  target_entropy=None,
-                 initial_log_entropy=0.,
+                 initial_log_alpha=0.,
                  # ATAC parameters
                  beta=1.0,  # the regularization coefficient in front of the Bellman error
                  norm_constraint=100,  # l2 norm constraint on the NN weight
@@ -44,9 +42,6 @@ class ATAC(nn.Module):
                  buffer_batch_size=256,  # for ATAC0 (sampling batch_size of init_observations)
                  # Misc
                  debug=True,
-                 # Heuristic
-                 heuristic_method='None',
-                 heuristic_temperature=0.01,
                  ):
 
         #############################################################################################
@@ -84,18 +79,14 @@ class ATAC(nn.Module):
         self._fixed_alpha = fixed_alpha
         if self._use_automatic_entropy_tuning:
             self._target_entropy = target_entropy if target_entropy else -np.prod(action_shape).item()
-            self._log_alpha = torch.nn.Parameter(torch.Tensor([initial_log_entropy])) # torch.Tensor([self._initial_log_entropy]).requires_grad_()
+            self._log_alpha = torch.nn.Parameter(torch.tensor(initial_log_alpha))
             self._alpha_optimizer = optimizer([self._log_alpha], lr=self._alpha_lr)
         else:
-            self._log_alpha = torch.Tensor([self._fixed_alpha]).log()
+            self._log_alpha = torch.tensor(self._fixed_alpha).log()
 
         # initial state pessimism (ATAC0)
         self._init_observations = torch.Tensor(init_observations) if init_observations is not None else init_observations  # if provided, it runs ATAC0
         self._buffer_batch_size = buffer_batch_size
-
-        # heuristic
-        self._heuristic_method = heuristic_method
-        self._heuristic_temperature = heuristic_temperature
 
     def update(self, observations, actions, next_observations, rewards, terminals, **kwargs):
 
@@ -109,7 +100,7 @@ class ATAC(nn.Module):
 
         # Pre-computation
         with torch.no_grad():  # regression target
-            new_next_actions = self.policy(next_observations).rsample()
+            new_next_actions = self.policy(next_observations).sample()
             target_q_values = torch.clip(self._target_qf(next_observations, new_next_actions), min=self._Vmin, max=self._Vmax)  # projection
             q_target = compute_bellman_backup(target_q_values.flatten())
 
@@ -138,9 +129,9 @@ class ATAC(nn.Module):
             # Compute Bellman error
             assert qfp.shape == qfpn.shape == qfna.shape == q_target.shape
             target_error = F.mse_loss(qfp, q_target)
-            q_target_pred = compute_bellman_backup(qfpn)
-            td_error = F.mse_loss(qfp, q_target_pred)
-            qf_bellman_loss = w1*target_error+ w2*td_error
+            q_backup = compute_bellman_backup(qfpn)  # compared with `q_target``, the gradient of `self._qf` is traced in `q_backup`.
+            residual_error = F.mse_loss(qfp, q_backup)
+            qf_bellman_loss = w1*target_error+ w2*residual_error
             # Compute pessimism term
             if self._init_observations is None:  # ATAC
                 pess_loss = (qfna - qfp).mean()
@@ -187,14 +178,13 @@ class ATAC(nn.Module):
                         alpha_loss=alpha_loss.item(),
                         policy_entropy=policy_entropy.item(),
                         alpha=alpha.item(),
-                        lower_bound=lower_bound.item(),
-        )
+                        lower_bound=lower_bound.item())
 
         # For logging
         if self._debug:
             with torch.no_grad():
                 debug_log_info = dict(
-                        bellman_surrogate=td_error.item(),
+                        bellman_surrogate=residual_error.item(),
                         qf1_pred_mean=qf_pred_both[0].mean().item(),
                         qf2_pred_mean = qf_pred_both[1].mean().item(),
                         q_target_mean = q_target.mean().item(),
