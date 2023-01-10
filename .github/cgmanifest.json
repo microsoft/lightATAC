@@ -1,0 +1,12 @@
+{
+    "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+    "Registrations": [
+        {
+            "Component": {
+                "Type": "git",
+                "Git": { "RepositoryUrl": "https://github.com/gwthomas/IQL-PyTorch", "CommitHash": "71ea1aa313bb9d4bc4526bbb1824c9d6f4a46b92" }
+            },
+            "DevelopmentDependency": false
+        }
+    ]
+}
