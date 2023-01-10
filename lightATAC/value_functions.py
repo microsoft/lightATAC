@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .util import mlp
 
+# Below are modified from gwthomas/IQL-PyTorch
 
 class TwinQ(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=256, n_hidden=2, ignore_actions=False):

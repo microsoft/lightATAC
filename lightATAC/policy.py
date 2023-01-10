@@ -9,6 +9,7 @@ from .util import mlp
 LOG_STD_MIN = -5.0
 LOG_STD_MAX = 2.0
 
+# Below are modified from gwthomas/IQL-PyTorch
 
 class GaussianPolicy(nn.Module):
     def __init__(self, obs_dim, act_dim, hidden_dim=256, n_hidden=2,
