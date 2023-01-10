@@ -6,7 +6,7 @@ setup(
     author='Ching-An Cheng',
     author_email='chinganc@microsoft.com',
     packages=['lightATAC'],
-    url='https://github.com/chinganc/lightATAC',
+    url='https://github.com/microsoft/lightATAC.git',
     license='MIT LICENSE',
     description='A lightweight version of ATAC code',
     long_description=open('README.md').read(),
