@@ -18,7 +18,9 @@ source ~/.bashrc
 
 More instructions can be found in `main.py`, and please see the [original paper](https://arxiv.org/abs/2202.02446) for hyperparameters (e.g., `beta`). The code was tested with python 3.9.
 
+The experimental results of lightATAC (over different $\beta$ values) on D4RL mujoco datasets can be viewed at https://tensorboard.dev/experiment/6RwXhalaQeWNmQNHDGvaFA.
 
+<<<<<<< HEAD
 This reimplementation is based on [gwthomas/IQL-PyTorch](https://github.com/gwthomas/IQL-PyTorch). It is minimalistic, so users can easily modify it for their needs. It follows mostly the logic in the original [ATAC](https://github.com/microsoft/ATAC) code, but with some code optimization, which gives about 1.5X-2X speed up.
 
 ## Contributing
@@ -42,3 +44,8 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
+=======
+
+
+This reimplementation is based on [gwthomas/IQL-PyTorch](https://github.com/gwthomas/IQL-PyTorch). It is minimalistic, so users can easily modify it for their needs. It follows mostly the logic in the original [ATAC](https://github.com/microsoft/ATAC) code, but with some code optimization leading to 1.5X-2X speed up.
+>>>>>>> dev/main

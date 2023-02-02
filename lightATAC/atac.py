@@ -21,6 +21,7 @@ class ATAC(nn.Module):
     def __init__(self, *,
                  policy,
                  qf,
+                 target_qf=None,
                  optimizer,
                  discount=0.99,
                  Vmin=-float('inf'), # min value of Q (used in target backup)
@@ -62,7 +63,7 @@ class ATAC(nn.Module):
         # networks
         self.policy = policy
         self._qf = qf
-        self._target_qf = copy.deepcopy(self._qf).requires_grad_(False)
+        self._target_qf = copy.deepcopy(self._qf).requires_grad_(False) if target_qf is None else target_qf
 
         # optimization
         self._policy_lr = policy_lr
@@ -96,12 +97,12 @@ class ATAC(nn.Module):
         ##### Update Critic #####
         def compute_bellman_backup(q_pred_next):
             assert rewards.shape == q_pred_next.shape
-            return rewards + (1.-terminals)*self._discount*q_pred_next
+            return (rewards + (1.-terminals)*self._discount*q_pred_next).clamp(min=self._Vmin, max=self._Vmax)
 
         # Pre-computation
         with torch.no_grad():  # regression target
             new_next_actions = self.policy(next_observations).sample()
-            target_q_values = torch.clip(self._target_qf(next_observations, new_next_actions), min=self._Vmin, max=self._Vmax)  # projection
+            target_q_values = self._target_qf(next_observations, new_next_actions)  # projection
             q_target = compute_bellman_backup(target_q_values.flatten())
 
         # qf_pred_both = self._qf.both(observations, actions)
