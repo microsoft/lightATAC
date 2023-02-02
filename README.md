@@ -1,6 +1,6 @@
 # lightATAC
 
-This is a lightweight reimplementation of **Adversarially Trained Actor Critic** ([ATAC](https://github.com/microsoft/ATAC)), a model-free offline reinforcement learning algorithm with SoTA performance on [D4RL](https://github.com/Farama-Foundation/D4RL) benchmark.
+This is a lightweight reimplementation of **Adversarially Trained Actor Critic** ([ATAC](https://github.com/microsoft/ATAC)), a model-free offline reinforcement learning algorithm by Ching-An Cheng*, Tengyang Xie*, Nan Jiang, and Alekh Agarwal.
 
 To install, simply clone the repo and  run `pip install -e . `. It uses mujoco210, which can be installed, if needed, following the commands below.
 
@@ -10,9 +10,7 @@ echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.mujoco/mujoco210/bin:/usr/lib/n
 source ~/.bashrc
 ```
 
-
-
- Then you can start the training by running, e.g.,
+Then you can start the training by running, e.g.,
 
     python main.py --log_dir ./tmp_results --env_name hopper-medium-expert-v2 --beta 1.0
 
@@ -20,7 +18,6 @@ More instructions can be found in `main.py`, and please see the [original paper]
 
 The experimental results of lightATAC (over different $\beta$ values) on D4RL mujoco datasets can be viewed at https://tensorboard.dev/experiment/6RwXhalaQeWNmQNHDGvaFA.
 
-<<<<<<< HEAD
 This reimplementation is based on [gwthomas/IQL-PyTorch](https://github.com/gwthomas/IQL-PyTorch). It is minimalistic, so users can easily modify it for their needs. It follows mostly the logic in the original [ATAC](https://github.com/microsoft/ATAC) code, but with some code optimization, which gives about 1.5X-2X speed up.
 
 ## Contributing
@@ -44,8 +41,3 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
-=======
-
-
-This reimplementation is based on [gwthomas/IQL-PyTorch](https://github.com/gwthomas/IQL-PyTorch). It is minimalistic, so users can easily modify it for their needs. It follows mostly the logic in the original [ATAC](https://github.com/microsoft/ATAC) code, but with some code optimization leading to 1.5X-2X speed up.
->>>>>>> dev/main
