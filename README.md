@@ -5,7 +5,7 @@ This is a lightweight reimplementation of **Adversarially Trained Actor Critic**
 To install, simply clone the repo and  run `pip install -e . `. It uses mujoco210, which can be installed, if needed, following the commands below.
 
 ```
-bash install_mujoco.sh
+bash install.sh
 echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.mujoco/mujoco210/bin:/usr/lib/nvidia" >> ~/.bashrc
 source ~/.bashrc
 ```
